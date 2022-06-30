@@ -8,6 +8,7 @@ import (
 	harvesterutil "github.com/harvester/harvester/pkg/util"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
@@ -22,6 +23,7 @@ import (
 
 const (
 	vmDeleteTimeout = 300
+	vmCreateTimeout = 15
 )
 
 func ResourceVirtualMachine() *schema.Resource {
@@ -49,6 +51,27 @@ func resourceVirtualMachineCreate(ctx context.Context, d *schema.ResourceData, m
 	if err != nil {
 		return diag.FromErr(err)
 	}
+
+	timeoutSeconds := int64(vmCreateTimeout)
+	events, err := c.HarvesterClient.KubevirtV1().VirtualMachines(namespace).Watch(ctx, metav1.ListOptions{
+		FieldSelector:  fmt.Sprintf("metadata.name=%s", name),
+		TimeoutSeconds: &timeoutSeconds,
+		Watch:          true,
+	})
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	vmready := false
+	for event := range events.ResultChan() {
+		if event.Type == watch.Added || event.Type == watch.Modified {
+			events.Stop()
+			vmready = true
+		}
+	}
+	if !vmready {
+		return diag.Errorf("Timeout waiting for VM %s to be created", name)
+	}
+
 	return resourceVirtualMachineImport(d, obj, nil)
 }
 
