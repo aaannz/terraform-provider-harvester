@@ -23,7 +23,7 @@ import (
 
 const (
 	vmDeleteTimeout = 300
-	vmCreateTimeout = 15
+	vmCreateTimeout = 300
 	vmLeasesTimeout = 300
 )
 
@@ -62,19 +62,31 @@ func resourceVirtualMachineCreate(ctx context.Context, d *schema.ResourceData, m
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	vmready := false
+	isVmReady := false
 	for event := range events.ResultChan() {
 		if event.Type == watch.Added || event.Type == watch.Modified {
-			events.Stop()
-			vmready = true
+			if event.Object.(*kubevirtv1.VirtualMachine).Status.Ready {
+				events.Stop()
+				isVmReady = true
+			}
 		}
 	}
-	if !vmready {
+	if !isVmReady {
 		return diag.Errorf("Timeout waiting for VM %s to be created", name)
 	}
 
-	waitForLease := d.Get(constants.FieldVirtualMachineWaitForLease).(bool)
-	if waitForLease {
+	// Gather all interfaces attached to VM for which `wait_for_lease` is set
+	waitForLeases := map[string]bool{}
+	networkInterfaces := d.Get(constants.FieldVirtualMachineNetworkInterface).([]interface{})
+	for _, ni := range networkInterfaces {
+		niData := ni.(map[string]interface{})
+		if val, ok := niData[constants.FieldNetworkInterfaceWaitForLease].(bool); ok && val {
+			waitForLeases[niData[constants.FiledNetworkInterfaceName].(string)] = true
+		}
+	}
+
+	// For all net interfaces in above gathered list wait until IP address is reported
+	if len(waitForLeases) > 0 {
 		timeoutSeconds = int64(vmLeasesTimeout)
 		events, err = c.HarvesterClient.KubevirtV1().VirtualMachineInstances(namespace).Watch(ctx, metav1.ListOptions{
 			FieldSelector:  fmt.Sprintf("metadata.name=%s", name),
@@ -89,10 +101,13 @@ func resourceVirtualMachineCreate(ctx context.Context, d *schema.ResourceData, m
 			if event.Type == watch.Added || event.Type == watch.Modified {
 				networks := event.Object.(*kubevirtv1.VirtualMachineInstance).Status.Interfaces
 				for _, net := range networks {
-					if len(net.IP) > 0 {
-						events.Stop()
-						gotip = true
+					if _, ok := waitForLeases[net.Name]; ok && len(net.IP) > 0 {
+						delete(waitForLeases, net.Name)
 					}
+				}
+				if len(waitForLeases) == 0 {
+					events.Stop()
+					gotip = true
 				}
 			}
 		}

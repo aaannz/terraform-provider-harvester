@@ -54,6 +54,11 @@ func resourceNetworkInterfaceSchema() map[string]*schema.Schema {
 			Type:     schema.TypeString,
 			Optional: true,
 		},
+		constants.FieldNetworkInterfaceWaitForLease: {
+			Type:     schema.TypeBool,
+			Optional: true,
+			Default:  false,
+		},
 	}
 	return s
 }

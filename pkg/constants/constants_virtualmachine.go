@@ -14,7 +14,6 @@ const (
 	FieldVirtualMachineDisk             = "disk"
 	FieldVirtualMachineNetworkInterface = "network_interface"
 	FieldVirtualMachineInstanceNodeName = "node_name"
-	FieldVirtualMachineWaitForLease     = "wait_for_lease"
 
 	StateVirtualMachineStarting = "starting"
 	StateVirtualMachineRunning  = "running"
@@ -41,6 +40,7 @@ const (
 	FiledNetworkInterfaceIPAddress     = "ip_address"
 	FiledNetworkInterfaceInterfaceName = "interface_name"
 	FiledNetworkInterfaceNetworkName   = "network_name"
+	FieldNetworkInterfaceWaitForLease  = "wait_for_lease"
 )
 
 const (
