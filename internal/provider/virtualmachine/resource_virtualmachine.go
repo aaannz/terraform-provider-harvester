@@ -24,6 +24,7 @@ import (
 const (
 	vmDeleteTimeout = 300
 	vmCreateTimeout = 15
+	vmLeasesTimeout = 300
 )
 
 func ResourceVirtualMachine() *schema.Resource {
@@ -70,6 +71,34 @@ func resourceVirtualMachineCreate(ctx context.Context, d *schema.ResourceData, m
 	}
 	if !vmready {
 		return diag.Errorf("Timeout waiting for VM %s to be created", name)
+	}
+
+	waitForLease := d.Get(constants.FieldVirtualMachineWaitForLease).(bool)
+	if waitForLease {
+		timeoutSeconds = int64(vmLeasesTimeout)
+		events, err = c.HarvesterClient.KubevirtV1().VirtualMachineInstances(namespace).Watch(ctx, metav1.ListOptions{
+			FieldSelector:  fmt.Sprintf("metadata.name=%s", name),
+			TimeoutSeconds: &timeoutSeconds,
+			Watch:          true,
+		})
+		if err != nil {
+			return diag.FromErr(err)
+		}
+		gotip := false
+		for event := range events.ResultChan() {
+			if event.Type == watch.Added || event.Type == watch.Modified {
+				networks := event.Object.(*kubevirtv1.VirtualMachineInstance).Status.Interfaces
+				for _, net := range networks {
+					if len(net.IP) > 0 {
+						events.Stop()
+						gotip = true
+					}
+				}
+			}
+		}
+		if !gotip {
+			return diag.Errorf("Timeout waiting for VM %s to get IP address", name)
+		}
 	}
 
 	return resourceVirtualMachineImport(d, obj, nil)

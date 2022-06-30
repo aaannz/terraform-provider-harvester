@@ -91,6 +91,11 @@ please use %s instead of this deprecated field:
 			Type:     schema.TypeString,
 			Computed: true,
 		},
+		constants.FieldVirtualMachineWaitForLease: {
+			Type:     schema.TypeBool,
+			Optional: true,
+			Default:  false,
+		},
 	}
 	util.NamespacedSchemaWrap(s, false)
 	return s

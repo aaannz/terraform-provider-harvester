@@ -14,6 +14,7 @@ const (
 	FieldVirtualMachineDisk             = "disk"
 	FieldVirtualMachineNetworkInterface = "network_interface"
 	FieldVirtualMachineInstanceNodeName = "node_name"
+	FieldVirtualMachineWaitForLease     = "wait_for_lease"
 
 	StateVirtualMachineStarting = "starting"
 	StateVirtualMachineRunning  = "running"
